@@ -1,36 +1,67 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Mis Gastos
 
-## Getting Started
+Web app personal (Next.js + shadcn/ui + Neon Postgres) para llevar los gastos del mes **sin cargar nada a mano**: el iPhone manda cada movimiento automáticamente mediante **Atajos de iOS**.
 
-First, run the development server:
+- **Apple Pay (Wallet):** cada pago se registra solo (monto + comercio).
+- **Mercado Pago / Lemon / Galicia:** al cerrar la app, el iPhone pregunta *¿Qué hiciste?* (pago, transferencia, ingreso o "solo consulté el saldo") y el monto.
+- Dashboard mensual con total gastado, ingresos, balance, gráfico por categoría y por medio de pago.
+- Reglas por comercio para categorizar automáticamente; lo que llega sin categoría queda "Por revisar".
+- Instalable como app en el iPhone (Safari → Compartir → *Agregar a inicio*).
+
+## Puesta en marcha
+
+1. **Base de datos:** creá un proyecto gratis en [Neon](https://console.neon.tech) y copiá el connection string (*pooled*).
+2. **Variables:** copiá `.env.example` a `.env.local` y completá los valores.
+3. Instalar y preparar la base:
+
+```bash
+npm install
+```
+
+```bash
+npm run db:migrate
+```
+
+```bash
+npm run db:seed
+```
+
+4. Levantar en local:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Deploy en Vercel
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+1. Subí el repo a GitHub e importalo en [vercel.com/new](https://vercel.com/new).
+2. En *Environment Variables* cargá `DATABASE_URL`, `APP_PASSWORD`, `SESSION_SECRET` e `INGEST_TOKEN`.
+3. Deploy. Entrá a `https://tu-app.vercel.app`, iniciá sesión y andá a **Ajustes**: ahí tenés la URL del endpoint, el token y la guía paso a paso para crear los Atajos (también en [docs/atajos-ios.md](docs/atajos-ios.md)).
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## API para Atajos
 
-## Learn More
+```
+POST /api/ingest
+Authorization: Bearer <INGEST_TOKEN>
+Content-Type: application/json
 
-To learn more about Next.js, take a look at the following resources:
+{ "amount": "12.500,00", "type": "expense", "source": "apple_pay", "merchant": "Coto" }
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+| Campo | Valores | Default |
+|---|---|---|
+| `amount` (obligatorio) | número o texto (`"$ 1.234,56"`, `"12500"`, `"1,234.56"`) | — |
+| `type` | `expense`, `transfer_out`, `income`, `transfer_in` | `expense` |
+| `source` | `apple_pay`, `mercadopago`, `lemon`, `galicia`, `manual`, `other` | `other` |
+| `merchant`, `description` | texto libre | — |
+| `category` | nombre exacto de una categoría | regla por comercio |
+| `occurredAt` | fecha ISO 8601 | ahora |
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Respuestas: `201` creado · `400` datos inválidos · `401` token incorrecto.
 
-## Deploy on Vercel
+## Scripts
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- `npm run db:generate` — generar migración tras cambiar `src/db/schema.ts`
+- `npm run db:migrate` — aplicar migraciones
+- `npm run db:seed` — cargar categorías por defecto
+- `npm run db:studio` — explorar la base
