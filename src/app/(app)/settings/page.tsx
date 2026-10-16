@@ -3,12 +3,18 @@ import { LogOutIcon } from "lucide-react"
 import { logout } from "@/app/actions"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { CategoryManager, CopyField, RuleList } from "@/components/settings-client"
+import { CategoryManager, CopyField, FixedBillManager, RuleList } from "@/components/settings-client"
 import { ShortcutsGuide } from "@/components/shortcuts-guide"
-import { getCategories, getMerchantRules } from "@/lib/data"
+import { getCategories, getFixedBillsStatus, getMerchantRules } from "@/lib/data"
+import { currentMonth } from "@/lib/dates"
 
 export default async function SettingsPage() {
-  const [categories, rules, h] = await Promise.all([getCategories(), getMerchantRules(), headers()])
+  const [categories, rules, bills, h] = await Promise.all([
+    getCategories(),
+    getMerchantRules(),
+    getFixedBillsStatus(currentMonth()),
+    headers(),
+  ])
   const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000"
   const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https")
   const endpoint = `${proto}://${host}/api/ingest`
@@ -47,6 +53,16 @@ export default async function SettingsPage() {
         </CardHeader>
         <CardContent>
           <ShortcutsGuide endpoint={endpoint} />
+        </CardContent>
+      </Card>
+
+      <Card id="cuentas-fijas" className="scroll-mt-4">
+        <CardHeader>
+          <CardTitle>Cuentas fijas</CardTitle>
+          <CardDescription>Lo que pagás todos los meses. En el inicio ves cuáles ya pagaste.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <FixedBillManager bills={bills} categories={categories} />
         </CardContent>
       </Card>
 

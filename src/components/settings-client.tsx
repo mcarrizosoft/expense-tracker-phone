@@ -3,10 +3,25 @@
 import { useRef, useState, useTransition } from "react"
 import { CheckIcon, CopyIcon, EyeIcon, EyeOffIcon, XIcon } from "lucide-react"
 import { toast } from "sonner"
-import { createCategory, deleteCategory, deleteMerchantRule } from "@/app/actions"
+import {
+  createCategory,
+  createFixedBill,
+  deleteCategory,
+  deleteFixedBill,
+  deleteMerchantRule,
+} from "@/app/actions"
 import type { Category } from "@/db/schema"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import type { FixedBillStatus } from "@/lib/data"
+import { formatARS } from "@/lib/money"
 
 export function CopyField({ value, secret = false }: { value: string; secret?: boolean }) {
   const [visible, setVisible] = useState(!secret)
@@ -143,5 +158,101 @@ export function RuleList({
         </li>
       ))}
     </ul>
+  )
+}
+
+export function FixedBillManager({
+  bills,
+  categories,
+}: {
+  bills: FixedBillStatus[]
+  categories: Category[]
+}) {
+  const [pending, startTransition] = useTransition()
+  const [categoryId, setCategoryId] = useState<string>("")
+  const [formKey, setFormKey] = useState(0)
+
+  function add(formData: FormData) {
+    formData.set("categoryId", categoryId)
+    startTransition(async () => {
+      const res = await createFixedBill(formData)
+      if (!res.ok) return void toast.error(res.error)
+      toast.success("Cuenta fija agregada")
+      setCategoryId("")
+      setFormKey((k) => k + 1)
+    })
+  }
+
+  function remove(b: FixedBillStatus) {
+    if (!confirm(`¿Quitar "${b.name}" de las cuentas fijas? Los pagos ya registrados no se borran.`)) return
+    startTransition(async () => {
+      await deleteFixedBill(b.id)
+      toast.success("Cuenta fija quitada")
+    })
+  }
+
+  return (
+    <div className="grid gap-4">
+      {bills.length > 0 && (
+        <ul className="divide-y">
+          {bills.map((b) => (
+            <li key={b.id} className="flex items-center gap-3 py-3 first:pt-0">
+              <span className="text-lg">{b.categoryEmoji}</span>
+              <div className="min-w-0 flex-1">
+                <div className="truncate font-medium">{b.name}</div>
+                <div className="truncate text-xs text-muted-foreground">
+                  {[
+                    b.categoryName,
+                    b.pattern && `contiene "${b.pattern}"`,
+                    b.dueDay && `vence el ${b.dueDay}`,
+                    b.expectedAmount !== null && `~${formatARS(b.expectedAmount)}`,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </div>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                disabled={pending}
+                aria-label={`Quitar ${b.name}`}
+                onClick={() => remove(b)}
+              >
+                <XIcon />
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <form key={formKey} action={add} className="grid gap-3 rounded-xl border border-dashed p-3">
+        <div className="text-xs font-medium text-muted-foreground">Nueva cuenta fija</div>
+        <Input name="name" placeholder="Nombre, ej: Internet" required />
+        <Select value={categoryId} onValueChange={setCategoryId}>
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder="Categoría" />
+          </SelectTrigger>
+          <SelectContent>
+            {categories.map((c) => (
+              <SelectItem key={c.id} value={String(c.id)}>
+                {c.emoji} {c.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <div className="grid grid-cols-2 gap-3">
+          <Input name="expectedAmount" inputMode="decimal" placeholder="Monto aprox." />
+          <Input name="dueDay" inputMode="numeric" placeholder="Vence el día…" />
+        </div>
+        <Input name="pattern" placeholder="Texto en comercio (opcional)" />
+        <p className="text-xs text-muted-foreground">
+          Se marca como pagada cuando registrás un gasto de esa categoría en el mes. Si en la misma
+          categoría tenés varias cuentas (luz, internet…), poné el texto que aparece en el comercio.
+        </p>
+        <Button type="submit" disabled={pending || !categoryId}>
+          Agregar cuenta fija
+        </Button>
+      </form>
+    </div>
   )
 }

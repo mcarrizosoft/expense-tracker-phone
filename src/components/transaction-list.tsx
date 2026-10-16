@@ -25,7 +25,7 @@ import { Separator } from "@/components/ui/separator"
 import { TransactionForm } from "@/components/transaction-form"
 import type { TransactionWithCategory } from "@/lib/data"
 import { formatDateTime } from "@/lib/dates"
-import { SOURCE_LABELS, TYPE_LABELS, isOutgoing } from "@/lib/labels"
+import { SOURCE_LABELS, TYPE_LABELS, isIncoming, isOutgoing } from "@/lib/labels"
 import { formatARS } from "@/lib/money"
 import { cn } from "@/lib/utils"
 
@@ -68,6 +68,7 @@ export function TransactionList({
       <ul className="divide-y">
         {items.map((tx) => {
           const out = isOutgoing(tx.type)
+          const sign = out ? "−" : isIncoming(tx.type) ? "+" : "⇄ "
           const meta = [formatDateTime(tx.occurredAt), SOURCE_LABELS[tx.source], tx.category?.name]
             .filter(Boolean)
             .join(" · ")
@@ -91,10 +92,11 @@ export function TransactionList({
                   <span
                     className={cn(
                       "font-semibold tabular-nums",
-                      !out && "text-emerald-600 dark:text-emerald-400"
+                      isIncoming(tx.type) && "text-emerald-600 dark:text-emerald-400",
+                      tx.type === "internal" && "text-muted-foreground"
                     )}
                   >
-                    {out ? "−" : "+"}
+                    {sign}
                     {formatARS(tx.amount)}
                   </span>
                   {tx.needsReview && (

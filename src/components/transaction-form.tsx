@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useTransition } from "react"
+import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { createTransaction, updateTransaction, type ActionResult } from "@/app/actions"
 import type { Category, TxSource, TxType } from "@/db/schema"
@@ -22,20 +23,26 @@ import { cn } from "@/lib/utils"
 
 const amountFormatter = new Intl.NumberFormat("es-AR", { minimumFractionDigits: 2 })
 
+export type TransactionDefaults = { categoryId?: number; merchant?: string; amount?: number }
+
 export function TransactionForm({
   categories,
   initial,
+  defaults,
   onDone,
 }: {
   categories: Category[]
   initial?: TransactionWithCategory
+  /** Valores precargados para un alta (por ejemplo, desde una cuenta fija). */
+  defaults?: TransactionDefaults
   onDone?: () => void
 }) {
+  const router = useRouter()
   const [pending, startTransition] = useTransition()
-  const [categoryId, setCategoryId] = useState<string>(
-    initial?.categoryId ? String(initial.categoryId) : "none"
-  )
-  const [merchant, setMerchant] = useState(initial?.merchant ?? "")
+  const initialCategory = initial?.categoryId ?? defaults?.categoryId
+  const [categoryId, setCategoryId] = useState<string>(initialCategory ? String(initialCategory) : "none")
+  const [merchant, setMerchant] = useState(initial?.merchant ?? defaults?.merchant ?? "")
+  const initialAmount = initial ? Number(initial.amount) : defaults?.amount
   const [formKey, setFormKey] = useState(0)
 
   function submit(formData: FormData) {
@@ -54,6 +61,10 @@ export function TransactionForm({
         return
       }
       toast.success(initial ? "Movimiento actualizado" : "Movimiento guardado")
+      if (!initial && defaults) {
+        router.push("/")
+        return
+      }
       if (!initial) {
         setCategoryId("none")
         setMerchant("")
@@ -79,7 +90,7 @@ export function TransactionForm({
             placeholder="0,00"
             required
             autoFocus={!initial}
-            defaultValue={initial ? amountFormatter.format(Number(initial.amount)) : ""}
+            defaultValue={initialAmount ? amountFormatter.format(initialAmount) : ""}
             className="h-14 pl-8 text-2xl font-semibold tabular-nums md:text-2xl"
           />
         </div>

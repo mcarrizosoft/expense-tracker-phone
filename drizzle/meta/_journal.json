@@ -8,6 +8,20 @@
       "when": 1791331830663,
       "tag": "0000_init",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1792127137566,
+      "tag": "0001_fixed_bills",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792127860929,
+      "tag": "0002_balances_and_savings",
+      "breakpoints": true
     }
   ]
 }

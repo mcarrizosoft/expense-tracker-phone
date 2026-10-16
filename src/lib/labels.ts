@@ -5,6 +5,7 @@ export const TYPE_LABELS: Record<TxType, string> = {
   income: "Ingreso",
   transfer_out: "Transferencia enviada",
   transfer_in: "Transferencia recibida",
+  internal: "Entre mis cuentas",
 }
 
 export const SOURCE_LABELS: Record<TxSource, string> = {
@@ -20,4 +21,10 @@ export const OUTGOING_TYPES: TxType[] = ["expense", "transfer_out"]
 
 export function isOutgoing(type: TxType) {
   return OUTGOING_TYPES.includes(type)
+}
+
+export const INCOMING_TYPES: TxType[] = ["income", "transfer_in"]
+
+export function isIncoming(type: TxType) {
+  return INCOMING_TYPES.includes(type)
 }

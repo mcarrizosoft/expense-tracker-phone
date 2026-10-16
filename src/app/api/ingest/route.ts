@@ -26,6 +26,7 @@ function clean(v: unknown) {
 function toType(v: unknown) {
   const s = clean(v)
   if (typeof s !== "string" || (txTypeEnum.enumValues as string[]).includes(s)) return s
+  if (/mis cuentas|entre cuentas|cuenta propia|movi entre|pase entre/.test(s)) return "internal"
   if (/recib|cobr|ingres|sueldo/.test(s)) return /transf/.test(s) ? "transfer_in" : "income"
   if (/transf|envi/.test(s)) return "transfer_out"
   if (/pag|compr|gast/.test(s)) return "expense"

@@ -1,15 +1,17 @@
 import Link from "next/link"
-import { ArrowDownLeftIcon, ArrowUpRightIcon, BellIcon } from "lucide-react"
+import { BellIcon, SparklesIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { BalanceCard } from "@/components/balance-card"
 import { CategoryChart } from "@/components/category-chart"
+import { FixedBillsCard } from "@/components/fixed-bills-card"
 import { MonthSwitcher } from "@/components/month-switcher"
 import { TransactionList } from "@/components/transaction-list"
-import { getCategories, getMonthSummary, getTransactions } from "@/lib/data"
-import { currentMonth, isValidMonth } from "@/lib/dates"
+import { getCategories, getFixedBillsStatus, getMonthSummary, getTransactions } from "@/lib/data"
+import { getBalances, getSavingsGoals } from "@/lib/balance"
+import { currentMonth, isValidMonth, monthName, shiftMonth } from "@/lib/dates"
 import { SOURCE_LABELS } from "@/lib/labels"
 import { formatARS } from "@/lib/money"
-import { cn } from "@/lib/utils"
 
 export default async function DashboardPage({
   searchParams,
@@ -19,50 +21,49 @@ export default async function DashboardPage({
   const { month: monthParam } = await searchParams
   const month = isValidMonth(monthParam) ? monthParam : currentMonth()
 
-  const [summary, recent, categories] = await Promise.all([
+  const [summary, recent, categories, bills, balances, goals] = await Promise.all([
     getMonthSummary(month),
     getTransactions({ month, limit: 8 }),
     getCategories(),
+    getFixedBillsStatus(month),
+    getBalances(month),
+    getSavingsGoals(),
   ])
+  const balance = balances.get(month) ?? {
+    month,
+    opening: 0,
+    openingIsManual: false,
+    income: 0,
+    spent: 0,
+    saved: 0,
+    closing: 0,
+    closedAt: null,
+  }
+  const savingsTotal = goals.reduce((acc, g) => acc + g.balance, 0)
+  const prevMonth = shiftMonth(month, -1)
+  const prev = month === currentMonth() ? balances.get(prevMonth) : undefined
+  const showCloseBanner = !!prev && !prev.closedAt && prev.closing > 0
   const maxSource = Math.max(1, ...summary.bySource.map((s) => s.total))
 
   return (
     <div className="grid gap-4">
       <MonthSwitcher month={month} basePath="/" />
 
-      <Card>
-        <CardContent className="grid gap-4">
-          <div>
-            <div className="text-sm text-muted-foreground">Gastado este mes</div>
-            <div className="text-4xl font-semibold tracking-tight tabular-nums">
-              {formatARS(summary.out)}
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-lg bg-muted/60 p-3">
-              <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                <ArrowDownLeftIcon className="size-3.5" /> Ingresos
-              </div>
-              <div className="font-semibold text-emerald-600 tabular-nums dark:text-emerald-400">
-                {formatARS(summary.in)}
-              </div>
-            </div>
-            <div className="rounded-lg bg-muted/60 p-3">
-              <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                <ArrowUpRightIcon className="size-3.5" /> Balance
-              </div>
-              <div
-                className={cn(
-                  "font-semibold tabular-nums",
-                  summary.balance < 0 ? "text-destructive" : "text-emerald-600 dark:text-emerald-400"
-                )}
-              >
-                {formatARS(summary.balance)}
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      {showCloseBanner && (
+        <Link
+          href={`/close?month=${prevMonth}`}
+          className="flex items-center gap-3 rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm"
+        >
+          <SparklesIcon className="size-4 shrink-0 text-emerald-500" />
+          <span className="flex-1">
+            Terminaste {monthName(prevMonth)} con <b>{formatARS(prev!.closing)}</b>. ¿Qué hacés con esa
+            plata?
+          </span>
+          <span className="shrink-0 font-medium">Cerrar →</span>
+        </Link>
+      )}
+
+      <BalanceCard balance={balance} savingsTotal={savingsTotal} />
 
       {summary.pending > 0 && (
         <Link
@@ -77,6 +78,8 @@ export default async function DashboardPage({
           <span className="font-medium">Revisar →</span>
         </Link>
       )}
+
+      <FixedBillsCard bills={bills} month={month} />
 
       <Card>
         <CardHeader>

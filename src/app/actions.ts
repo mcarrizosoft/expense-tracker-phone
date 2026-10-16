@@ -8,7 +8,11 @@ import { z } from "zod"
 import { db } from "@/db"
 import {
   categories,
+  fixedBills,
   merchantRules,
+  monthBalances,
+  savingsGoals,
+  savingsMovements,
   transactions,
   txSourceEnum,
   txTypeEnum,
@@ -20,7 +24,7 @@ import {
   safeEqual,
   verifySessionToken,
 } from "@/lib/auth"
-import { fromLocalInputValue } from "@/lib/dates"
+import { currentMonth, fromLocalInputValue, isValidMonth } from "@/lib/dates"
 import { parseAmount } from "@/lib/money"
 
 export type ActionResult = { ok: true } | { ok: false; error: string }
@@ -180,6 +184,213 @@ export async function deleteCategory(id: number): Promise<ActionResult> {
 export async function deleteMerchantRule(id: number): Promise<ActionResult> {
   await requireSession()
   await db.delete(merchantRules).where(eq(merchantRules.id, id))
+  refresh()
+  return { ok: true }
+}
+
+// --- Cuentas fijas --------------------------------------------------------
+
+const fixedBillSchema = z.object({
+  name: z.string().trim().min(1, "Poné un nombre").max(60),
+  categoryId: z.coerce.number().int().positive("Elegí una categoría"),
+  pattern: z.string().trim().max(60).optional(),
+  expectedAmount: z.string().optional(),
+  dueDay: z.string().optional(),
+})
+
+export async function createFixedBill(formData: FormData): Promise<ActionResult> {
+  await requireSession()
+  const parsed = fixedBillSchema.safeParse(Object.fromEntries(formData))
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message }
+  const d = parsed.data
+
+  let expectedAmount: string | null = null
+  if (d.expectedAmount?.trim()) {
+    const amount = parseAmount(d.expectedAmount)
+    if (amount === null) return { ok: false, error: "Monto estimado inválido" }
+    expectedAmount = amount.toFixed(2)
+  }
+
+  let dueDay: number | null = null
+  if (d.dueDay?.trim()) {
+    dueDay = Number(d.dueDay)
+    if (!Number.isInteger(dueDay) || dueDay < 1 || dueDay > 31) {
+      return { ok: false, error: "El día de vencimiento va de 1 a 31" }
+    }
+  }
+
+  await db.insert(fixedBills).values({
+    name: d.name,
+    categoryId: d.categoryId,
+    pattern: d.pattern || null,
+    expectedAmount,
+    dueDay,
+  })
+  refresh()
+  return { ok: true }
+}
+
+export async function deleteFixedBill(id: number): Promise<ActionResult> {
+  await requireSession()
+  await db.delete(fixedBills).where(eq(fixedBills.id, id))
+  refresh()
+  return { ok: true }
+}
+
+// --- Saldo y cierre de mes ------------------------------------------------
+
+export async function setOpeningBalance(month: string, raw: string): Promise<ActionResult> {
+  await requireSession()
+  if (!isValidMonth(month)) return { ok: false, error: "Mes inválido" }
+
+  let openingBalance: string | null = null
+  if (raw.trim()) {
+    const negative = raw.trim().startsWith("-")
+    const amount = parseAmount(raw)
+    if (amount === null && raw.replace(/[^d]/g, "") !== "0") {
+      return { ok: false, error: "Monto inválido" }
+    }
+    openingBalance = ((negative ? -1 : 1) * (amount ?? 0)).toFixed(2)
+  }
+
+  await db
+    .insert(monthBalances)
+    .values({ month, openingBalance })
+    .onConflictDoUpdate({ target: monthBalances.month, set: { openingBalance } })
+  refresh()
+  return { ok: true }
+}
+
+const allocationSchema = z.array(
+  z.object({ goalId: z.number().int().positive(), amount: z.number().positive(), usd: z.number().positive().optional() })
+)
+
+/** Reparte lo que sobró del mes en sobres y marca el mes como cerrado. */
+export async function closeMonth(
+  month: string,
+  allocations: { goalId: number; amount: number; usd?: number }[]
+): Promise<ActionResult> {
+  await requireSession()
+  if (!isValidMonth(month)) return { ok: false, error: "Mes inválido" }
+  const parsed = allocationSchema.safeParse(allocations)
+  if (!parsed.success) return { ok: false, error: "Montos inválidos" }
+
+  if (parsed.data.length > 0) {
+    await db.insert(savingsMovements).values(
+      parsed.data.map((a) => ({
+        goalId: a.goalId,
+        month,
+        amount: a.amount.toFixed(2),
+        usd: a.usd ? a.usd.toFixed(2) : null,
+        note: "Cierre de mes",
+      }))
+    )
+  }
+  await db
+    .insert(monthBalances)
+    .values({ month, closedAt: new Date() })
+    .onConflictDoUpdate({ target: monthBalances.month, set: { closedAt: new Date() } })
+  refresh()
+  return { ok: true }
+}
+
+export async function reopenMonth(month: string): Promise<ActionResult> {
+  await requireSession()
+  await db.update(monthBalances).set({ closedAt: null }).where(eq(monthBalances.month, month))
+  refresh()
+  return { ok: true }
+}
+
+// --- Sobres de ahorro -----------------------------------------------------
+
+const goalSchema = z.object({
+  name: z.string().trim().min(1, "Poné un nombre").max(40),
+  emoji: z.string().trim().min(1).max(8).default("💰"),
+  target: z.string().optional(),
+  isUsd: z.string().optional(),
+})
+
+export async function createSavingsGoal(formData: FormData): Promise<ActionResult> {
+  await requireSession()
+  const parsed = goalSchema.safeParse(Object.fromEntries(formData))
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message }
+  const d = parsed.data
+
+  let target: string | null = null
+  if (d.target?.trim()) {
+    const amount = parseAmount(d.target)
+    if (amount === null) return { ok: false, error: "Meta inválida" }
+    target = amount.toFixed(2)
+  }
+
+  const inserted = await db
+    .insert(savingsGoals)
+    .values({ name: d.name, emoji: d.emoji, target, isUsd: d.isUsd === "on" })
+    .onConflictDoNothing()
+    .returning()
+  if (inserted.length === 0) return { ok: false, error: "Ya existe un sobre con ese nombre" }
+  refresh()
+  return { ok: true }
+}
+
+export async function updateSavingsTarget(id: number, raw: string): Promise<ActionResult> {
+  await requireSession()
+  let target: string | null = null
+  if (raw.trim()) {
+    const amount = parseAmount(raw)
+    if (amount === null) return { ok: false, error: "Meta inválida" }
+    target = amount.toFixed(2)
+  }
+  await db.update(savingsGoals).set({ target }).where(eq(savingsGoals.id, id))
+  refresh()
+  return { ok: true }
+}
+
+export async function deleteSavingsGoal(id: number): Promise<ActionResult> {
+  await requireSession()
+  await db.delete(savingsGoals).where(eq(savingsGoals.id, id))
+  refresh()
+  return { ok: true }
+}
+
+const savingsMoveSchema = z.object({
+  goalId: z.coerce.number().int().positive(),
+  kind: z.enum(["deposit", "withdraw"]),
+  amount: z.string().min(1, "Ingresá un monto"),
+  usd: z.string().optional(),
+  note: z.string().trim().max(200).optional(),
+})
+
+/** Depositar o retirar de un sobre. Afecta el disponible del mes actual. */
+export async function moveSavings(formData: FormData): Promise<ActionResult> {
+  await requireSession()
+  const parsed = savingsMoveSchema.safeParse(Object.fromEntries(formData))
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message }
+  const d = parsed.data
+
+  const amount = parseAmount(d.amount)
+  if (amount === null) return { ok: false, error: "Monto inválido" }
+  let usd: number | null = null
+  if (d.usd?.trim()) {
+    usd = parseAmount(d.usd)
+    if (usd === null) return { ok: false, error: "Monto en dólares inválido" }
+  }
+  const sign = d.kind === "deposit" ? 1 : -1
+
+  await db.insert(savingsMovements).values({
+    goalId: d.goalId,
+    month: currentMonth(),
+    amount: (sign * amount).toFixed(2),
+    usd: usd === null ? null : (sign * usd).toFixed(2),
+    note: d.note ?? "",
+  })
+  refresh()
+  return { ok: true }
+}
+
+export async function deleteSavingsMovement(id: number): Promise<ActionResult> {
+  await requireSession()
+  await db.delete(savingsMovements).where(eq(savingsMovements.id, id))
   refresh()
   return { ok: true }
 }

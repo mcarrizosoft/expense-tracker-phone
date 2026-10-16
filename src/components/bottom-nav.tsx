@@ -2,13 +2,14 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { HomeIcon, ListIcon, PlusIcon, SettingsIcon } from "lucide-react"
+import { HomeIcon, ListIcon, PiggyBankIcon, PlusIcon, SettingsIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 const items = [
   { href: "/", label: "Inicio", icon: HomeIcon },
   { href: "/transactions", label: "Movimientos", icon: ListIcon },
   { href: "/new", label: "Agregar", icon: PlusIcon },
+  { href: "/savings", label: "Ahorros", icon: PiggyBankIcon },
   { href: "/settings", label: "Ajustes", icon: SettingsIcon },
 ]
 
@@ -17,7 +18,7 @@ export function BottomNav({ pending }: { pending: number }) {
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/90 pb-[env(safe-area-inset-bottom)] backdrop-blur md:static md:border-t-0 md:bg-transparent md:pb-0 md:backdrop-blur-none">
-      <ul className="mx-auto grid max-w-2xl grid-cols-4 md:flex md:gap-1">
+      <ul className="mx-auto grid max-w-2xl grid-cols-5 md:flex md:gap-1">
         {items.map(({ href, label, icon: Icon }) => {
           const active = href === "/" ? pathname === "/" : pathname.startsWith(href)
           return (

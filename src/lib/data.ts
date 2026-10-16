@@ -3,6 +3,7 @@ import { and, count, desc, eq, gte, lt, sql, type SQL } from "drizzle-orm"
 import { db } from "@/db"
 import {
   categories,
+  fixedBills,
   merchantRules,
   transactions,
   type TxSource,
@@ -140,3 +141,54 @@ export async function getTransactions(f: TransactionFilters) {
 }
 
 export type TransactionWithCategory = Awaited<ReturnType<typeof getTransactions>>[number]
+
+/** Cuentas fijas con el pago (si existe) que las cubre en el mes indicado. */
+export async function getFixedBillsStatus(month: string) {
+  const { start, end } = monthRange(month)
+  const rows = await db.execute<{
+    id: number
+    name: string
+    pattern: string | null
+    expected_amount: string | null
+    due_day: number | null
+    category_id: number
+    category_name: string
+    category_emoji: string
+    paid_amount: string | null
+    paid_at: string | null
+  }>(sql`
+    select b.id, b.name, b.pattern, b.expected_amount, b.due_day, b.category_id,
+           c.name as category_name, c.emoji as category_emoji,
+           p.amount as paid_amount, p.occurred_at as paid_at
+    from ${fixedBills} b
+    join ${categories} c on c.id = b.category_id
+    left join lateral (
+      select t.amount, t.occurred_at
+      from ${transactions} t
+      where t.category_id = b.category_id
+        and t.type in ('expense', 'transfer_out')
+        and t.occurred_at >= ${start.toISOString()} and t.occurred_at < ${end.toISOString()}
+        and (b.pattern is null
+             or coalesce(t.merchant, '') ilike '%' || b.pattern || '%'
+             or t.description ilike '%' || b.pattern || '%')
+      order by t.occurred_at desc
+      limit 1
+    ) p on true
+    order by coalesce(b.due_day, 99), b.name
+  `)
+
+  return rows.rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    pattern: r.pattern,
+    expectedAmount: r.expected_amount === null ? null : Number(r.expected_amount),
+    dueDay: r.due_day,
+    categoryId: r.category_id,
+    categoryName: r.category_name,
+    categoryEmoji: r.category_emoji,
+    paidAmount: r.paid_amount === null ? null : Number(r.paid_amount),
+    paidAt: r.paid_at === null ? null : new Date(r.paid_at),
+  }))
+}
+
+export type FixedBillStatus = Awaited<ReturnType<typeof getFixedBillsStatus>>[number]

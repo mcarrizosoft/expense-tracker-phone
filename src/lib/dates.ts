@@ -7,6 +7,11 @@ export function currentMonth(): string {
   return now.toISOString().slice(0, 7)
 }
 
+/** Día del mes (1-31) en hora argentina. */
+export function todayDay(): number {
+  return new Date(Date.now() - 3 * 60 * 60 * 1000).getUTCDate()
+}
+
 export function isValidMonth(m: string | undefined): m is string {
   return !!m && /^\d{4}-(0[1-9]|1[0-2])$/.test(m)
 }
@@ -50,4 +55,12 @@ export function toLocalInputValue(date: Date): string {
 
 export function fromLocalInputValue(value: string): Date {
   return new Date(`${value}:00${AR_OFFSET}`)
+}
+
+/** "septiembre" (sin año), para frases como "Saldo de septiembre". */
+export function monthName(month: string): string {
+  return new Date(`${month}-15T12:00:00${AR_OFFSET}`).toLocaleDateString("es-AR", {
+    month: "long",
+    timeZone: AR_TZ,
+  })
 }
