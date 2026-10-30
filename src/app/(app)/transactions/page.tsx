@@ -5,7 +5,7 @@ import { MonthSwitcher } from "@/components/month-switcher"
 import { TransactionFilters } from "@/components/transaction-filters"
 import { TransactionList } from "@/components/transaction-list"
 import { txSourceEnum, type TxSource } from "@/db/schema"
-import { getCategories, getTransactions } from "@/lib/data"
+import { getCategories, getFixedBillOptions, getTransactions } from "@/lib/data"
 import { currentMonth, isValidMonth } from "@/lib/dates"
 import { isOutgoing } from "@/lib/labels"
 import { formatARS } from "@/lib/money"
@@ -26,9 +26,10 @@ export default async function TransactionsPage({
   const categoryId =
     sp.category === "none" ? ("none" as const) : sp.category ? Number(sp.category) || undefined : undefined
 
-  const [items, categories] = await Promise.all([
+  const [items, categories, fixedBills] = await Promise.all([
     getTransactions({ month, source, categoryId, pendingOnly }),
     getCategories(),
+    getFixedBillOptions(),
   ])
   const total = items.reduce((acc, t) => acc + (isOutgoing(t.type) ? Number(t.amount) : 0), 0)
 
@@ -71,6 +72,7 @@ export default async function TransactionsPage({
           <TransactionList
             items={items}
             categories={categories}
+            fixedBills={fixedBills}
             emptyText={pendingOnly ? "Nada por revisar 🎉" : "No hay movimientos con estos filtros."}
           />
         </CardContent>

@@ -1,8 +1,9 @@
 import Link from "next/link"
-import { CheckCircle2Icon, CircleIcon, PlusIcon } from "lucide-react"
+import { CheckCircle2Icon, CircleIcon } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { PayBillButton } from "@/components/pay-bill-button"
 import type { FixedBillStatus } from "@/lib/data"
 import { currentMonth, formatDateTime, todayDay } from "@/lib/dates"
 import { formatARS } from "@/lib/money"
@@ -45,8 +46,6 @@ export function FixedBillsCard({ bills, month }: { bills: FixedBillStatus[]; mon
             {bills.map((b) => {
               const isPaid = b.paidAmount !== null
               const overdue = !isPaid && isCurrent && b.dueDay !== null && today > b.dueDay
-              const params = new URLSearchParams({ category: String(b.categoryId), merchant: b.name })
-              if (b.expectedAmount) params.set("amount", String(b.expectedAmount))
 
               return (
                 <li key={b.id} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
@@ -80,11 +79,13 @@ export function FixedBillsCard({ bills, month }: { bills: FixedBillStatus[]; mon
                         </span>
                       )}
                       {isCurrent && (
-                        <Button asChild variant="outline" size="icon" aria-label={`Registrar pago de ${b.name}`}>
-                          <Link href={`/new?${params}`}>
-                            <PlusIcon />
-                          </Link>
-                        </Button>
+                        <PayBillButton
+                          billId={b.id}
+                          name={b.name}
+                          emoji={b.categoryEmoji}
+                          expectedAmount={b.expectedAmount}
+                          lastSource={b.lastSource}
+                        />
                       )}
                     </div>
                   )}

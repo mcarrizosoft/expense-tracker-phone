@@ -156,24 +156,26 @@ export async function getFixedBillsStatus(month: string) {
     category_emoji: string
     paid_amount: string | null
     paid_at: string | null
+    last_source: TxSource | null
   }>(sql`
     select b.id, b.name, b.pattern, b.expected_amount, b.due_day, b.category_id,
            c.name as category_name, c.emoji as category_emoji,
-           p.amount as paid_amount, p.occurred_at as paid_at
+           p.amount as paid_amount, p.occurred_at as paid_at, ls.source as last_source
     from ${fixedBills} b
     join ${categories} c on c.id = b.category_id
     left join lateral (
-      select t.amount, t.occurred_at
+      select sum(t.amount) as amount, max(t.occurred_at) as occurred_at
       from ${transactions} t
-      where t.category_id = b.category_id
-        and t.type in ('expense', 'transfer_out')
+      where t.fixed_bill_id = b.id
         and t.occurred_at >= ${start.toISOString()} and t.occurred_at < ${end.toISOString()}
-        and (b.pattern is null
-             or coalesce(t.merchant, '') ilike '%' || b.pattern || '%'
-             or t.description ilike '%' || b.pattern || '%')
+      having count(*) > 0
+    ) p on true
+    left join lateral (
+      select t.source from ${transactions} t
+      where t.fixed_bill_id = b.id
       order by t.occurred_at desc
       limit 1
-    ) p on true
+    ) ls on true
     order by coalesce(b.due_day, 99), b.name
   `)
 
@@ -188,7 +190,39 @@ export async function getFixedBillsStatus(month: string) {
     categoryEmoji: r.category_emoji,
     paidAmount: r.paid_amount === null ? null : Number(r.paid_amount),
     paidAt: r.paid_at === null ? null : new Date(r.paid_at),
+    lastSource: r.last_source,
   }))
 }
 
 export type FixedBillStatus = Awaited<ReturnType<typeof getFixedBillsStatus>>[number]
+
+/** Cuenta fija sin pagar este mes cuyo nombre (o pattern) es el comienzo del comercio. */
+export async function fixedBillForMerchant(merchant: string | null | undefined, when: Date) {
+  if (!merchant) return null
+  const month = new Date(when.getTime() - 3 * 60 * 60 * 1000).toISOString().slice(0, 7)
+  const { start, end } = monthRange(month)
+  const [row] = await db
+    .select({ id: fixedBills.id, categoryId: fixedBills.categoryId })
+    .from(fixedBills)
+    .where(
+      sql`lower(${merchant}) like lower(coalesce(${fixedBills.pattern}, ${fixedBills.name})) || '%'
+        and not exists (
+          select 1 from ${transactions} t
+          where t.fixed_bill_id = ${fixedBills.id}
+            and t.occurred_at >= ${start.toISOString()} and t.occurred_at < ${end.toISOString()}
+        )`
+    )
+    .orderBy(desc(sql`length(coalesce(${fixedBills.pattern}, ${fixedBills.name}))`))
+    .limit(1)
+  return row ?? null
+}
+
+/** Lista simple de cuentas fijas, para selectores. */
+export async function getFixedBillOptions() {
+  return db
+    .select({ id: fixedBills.id, name: fixedBills.name, categoryId: fixedBills.categoryId })
+    .from(fixedBills)
+    .orderBy(fixedBills.name)
+}
+
+export type FixedBillOption = Awaited<ReturnType<typeof getFixedBillOptions>>[number]

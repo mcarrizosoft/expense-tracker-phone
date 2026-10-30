@@ -22,6 +22,13 @@
       "when": 1792127860929,
       "tag": "0002_balances_and_savings",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1793384801650,
+      "tag": "0003_fixed_bill_link",
+      "breakpoints": true
     }
   ]
 }

@@ -131,6 +131,7 @@ export default async function DashboardPage({
           <TransactionList
             items={recent}
             categories={categories}
+            fixedBills={bills.map((b) => ({ id: b.id, name: b.name, categoryId: b.categoryId }))}
             emptyText="Sin movimientos. Agregá uno o configurá los Atajos en Ajustes."
           />
         </CardContent>

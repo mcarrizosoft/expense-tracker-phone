@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
 import { TransactionForm } from "@/components/transaction-form"
-import type { TransactionWithCategory } from "@/lib/data"
+import type { FixedBillOption, TransactionWithCategory } from "@/lib/data"
 import { formatDateTime } from "@/lib/dates"
 import { SOURCE_LABELS, TYPE_LABELS, isIncoming, isOutgoing } from "@/lib/labels"
 import { formatARS } from "@/lib/money"
@@ -32,10 +32,12 @@ import { cn } from "@/lib/utils"
 export function TransactionList({
   items,
   categories,
+  fixedBills = [],
   emptyText = "No hay movimientos.",
 }: {
   items: TransactionWithCategory[]
   categories: Category[]
+  fixedBills?: FixedBillOption[]
   emptyText?: string
 }) {
   const [editing, setEditing] = useState<TransactionWithCategory | null>(null)
@@ -143,6 +145,7 @@ export function TransactionList({
               <TransactionForm
                 key={editing.id}
                 categories={categories}
+                fixedBills={fixedBills}
                 initial={editing}
                 onDone={() => setEditing(null)}
               />

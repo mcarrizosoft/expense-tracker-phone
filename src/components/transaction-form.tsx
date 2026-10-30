@@ -16,7 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import type { TransactionWithCategory } from "@/lib/data"
+import type { FixedBillOption, TransactionWithCategory } from "@/lib/data"
 import { toLocalInputValue } from "@/lib/dates"
 import { SOURCE_LABELS, TYPE_LABELS } from "@/lib/labels"
 import { cn } from "@/lib/utils"
@@ -29,12 +29,15 @@ export function TransactionForm({
   categories,
   initial,
   defaults,
+  fixedBills = [],
   onDone,
 }: {
   categories: Category[]
   initial?: TransactionWithCategory
   /** Valores precargados para un alta (por ejemplo, desde una cuenta fija). */
   defaults?: TransactionDefaults
+  /** Cuentas fijas para vincular el movimiento como su pago. */
+  fixedBills?: FixedBillOption[]
   onDone?: () => void
 }) {
   const router = useRouter()
@@ -43,10 +46,20 @@ export function TransactionForm({
   const [categoryId, setCategoryId] = useState<string>(initialCategory ? String(initialCategory) : "none")
   const [merchant, setMerchant] = useState(initial?.merchant ?? defaults?.merchant ?? "")
   const initialAmount = initial ? Number(initial.amount) : defaults?.amount
+  const [fixedBillId, setFixedBillId] = useState<string>(
+    initial?.fixedBillId ? String(initial.fixedBillId) : "none"
+  )
+
+  function chooseBill(value: string) {
+    setFixedBillId(value)
+    const bill = fixedBills.find((b) => String(b.id) === value)
+    if (bill && categoryId === "none") setCategoryId(String(bill.categoryId))
+  }
   const [formKey, setFormKey] = useState(0)
 
   function submit(formData: FormData) {
     formData.set("categoryId", categoryId)
+    formData.set("fixedBillId", fixedBillId)
     startTransition(async () => {
       let result: ActionResult
       try {
@@ -67,6 +80,7 @@ export function TransactionForm({
       }
       if (!initial) {
         setCategoryId("none")
+        setFixedBillId("none")
         setMerchant("")
         setFormKey((k) => k + 1)
       }
@@ -153,6 +167,25 @@ export function TransactionForm({
           })}
         </div>
       </div>
+
+      {fixedBills.length > 0 && (
+        <div className="grid gap-2">
+          <Label>Pago de cuenta fija</Label>
+          <Select value={fixedBillId} onValueChange={chooseBill}>
+            <SelectTrigger className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">No es una cuenta fija</SelectItem>
+              {fixedBills.map((b) => (
+                <SelectItem key={b.id} value={String(b.id)}>
+                  {b.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
 
       <div className="grid gap-2">
         <Label htmlFor="merchant">Comercio / destinatario</Label>

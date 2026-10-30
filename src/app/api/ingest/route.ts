@@ -4,7 +4,7 @@ import { z } from "zod"
 import { db } from "@/db"
 import { transactions, txSourceEnum, txTypeEnum } from "@/db/schema"
 import { safeEqual } from "@/lib/auth"
-import { categoryForMerchant, categoryIdByName } from "@/lib/data"
+import { categoryForMerchant, categoryIdByName, fixedBillForMerchant } from "@/lib/data"
 import { isOutgoing } from "@/lib/labels"
 import { parseAmount } from "@/lib/money"
 
@@ -98,8 +98,12 @@ export async function POST(req: NextRequest) {
     if (!Number.isNaN(d.getTime())) occurredAt = d
   }
 
+  const bill = isOutgoing(data.type) ? await fixedBillForMerchant(data.merchant, occurredAt) : null
   const categoryId =
-    (await categoryIdByName(data.category)) ?? (await categoryForMerchant(data.merchant))
+    (await categoryIdByName(data.category)) ??
+    (await categoryForMerchant(data.merchant)) ??
+    bill?.categoryId ??
+    null
 
   const [row] = await db
     .insert(transactions)
@@ -110,6 +114,7 @@ export async function POST(req: NextRequest) {
       merchant: data.merchant ?? null,
       description: data.description ?? "",
       categoryId,
+      fixedBillId: bill?.id ?? null,
       occurredAt,
       needsReview: categoryId === null && isOutgoing(data.type),
     })

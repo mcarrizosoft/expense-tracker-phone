@@ -76,6 +76,7 @@ const txSchema = z.object({
   categoryId: z.string().optional(),
   occurredAt: z.string().optional(),
   rememberMerchant: z.string().optional(),
+  fixedBillId: z.string().optional(),
 })
 
 function parseTxForm(formData: FormData) {
@@ -87,6 +88,7 @@ function parseTxForm(formData: FormData) {
   if (amount === null) return { error: "Monto inválido" } as const
 
   const categoryId = d.categoryId && d.categoryId !== "none" ? Number(d.categoryId) : null
+  const fixedBillId = d.fixedBillId && d.fixedBillId !== "none" ? Number(d.fixedBillId) : null
   const occurredAt = d.occurredAt ? fromLocalInputValue(d.occurredAt) : new Date()
   if (Number.isNaN(occurredAt.getTime())) return { error: "Fecha inválida" } as const
 
@@ -98,6 +100,7 @@ function parseTxForm(formData: FormData) {
       merchant: d.merchant || null,
       description: d.description ?? "",
       categoryId,
+      fixedBillId,
       occurredAt,
       needsReview: false,
     },
@@ -225,6 +228,37 @@ export async function createFixedBill(formData: FormData): Promise<ActionResult>
     pattern: d.pattern || null,
     expectedAmount,
     dueDay,
+  })
+  refresh()
+  return { ok: true }
+}
+
+const payBillSchema = z.object({
+  billId: z.number().int().positive(),
+  amount: z.string().min(1, "Ingresá un monto"),
+  source: z.enum(txSourceEnum.enumValues),
+})
+
+/** Registra el pago de una cuenta fija con un toque: crea el gasto ya vinculado. */
+export async function payFixedBill(input: { billId: number; amount: string; source: string }): Promise<ActionResult> {
+  await requireSession()
+  const parsed = payBillSchema.safeParse(input)
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message }
+  const amount = parseAmount(parsed.data.amount)
+  if (amount === null) return { ok: false, error: "Monto inválido" }
+
+  const [bill] = await db.select().from(fixedBills).where(eq(fixedBills.id, parsed.data.billId))
+  if (!bill) return { ok: false, error: "Esa cuenta fija ya no existe" }
+
+  await db.insert(transactions).values({
+    amount: amount.toFixed(2),
+    type: "expense",
+    source: parsed.data.source,
+    merchant: bill.name,
+    description: "Cuenta fija",
+    categoryId: bill.categoryId,
+    fixedBillId: bill.id,
+    occurredAt: new Date(),
   })
   refresh()
   return { ok: true }

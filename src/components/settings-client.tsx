@@ -203,7 +203,7 @@ export function FixedBillManager({
                 <div className="truncate text-xs text-muted-foreground">
                   {[
                     b.categoryName,
-                    b.pattern && `contiene "${b.pattern}"`,
+                    b.pattern && `empieza con "${b.pattern}"`,
                     b.dueDay && `vence el ${b.dueDay}`,
                     b.expectedAmount !== null && `~${formatARS(b.expectedAmount)}`,
                   ]
@@ -244,10 +244,11 @@ export function FixedBillManager({
           <Input name="expectedAmount" inputMode="decimal" placeholder="Monto aprox." />
           <Input name="dueDay" inputMode="numeric" placeholder="Vence el día…" />
         </div>
-        <Input name="pattern" placeholder="Texto en comercio (opcional)" />
+        <Input name="pattern" placeholder="El comercio empieza con… (opcional)" />
         <p className="text-xs text-muted-foreground">
-          Se marca como pagada cuando registrás un gasto de esa categoría en el mes. Si en la misma
-          categoría tenés varias cuentas (luz, internet…), poné el texto que aparece en el comercio.
+          Se marca pagada cuando tocás «Pagar» en el inicio, o cuando llega un gasto de los Atajos
+          cuyo comercio empieza con el nombre (ej: «Luz depto» → Luz). Si el comercio se llama
+          distinto, completá con qué empieza.
         </p>
         <Button type="submit" disabled={pending || !categoryId}>
           Agregar cuenta fija

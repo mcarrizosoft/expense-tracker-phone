@@ -1,4 +1,5 @@
 import {
+  type AnyPgColumn,
   boolean,
   index,
   integer,
@@ -53,6 +54,10 @@ export const transactions = pgTable(
       .notNull()
       .defaultNow(),
     needsReview: boolean("needs_review").notNull().default(false),
+    /** Si este movimiento es el pago de una cuenta fija. */
+    fixedBillId: integer("fixed_bill_id").references((): AnyPgColumn => fixedBills.id, {
+      onDelete: "set null",
+    }),
   },
   (t) => [index("transactions_occurred_at_idx").on(t.occurredAt)]
 )
@@ -67,8 +72,9 @@ export const merchantRules = pgTable("merchant_rules", {
 
 /**
  * Gastos que se repiten todos los meses (alquiler, luz, internet…).
- * Se consideran pagados en un mes si hay un egreso de esa categoría
- * cuyo comercio/nota contenga `pattern` (o cualquiera, si no hay pattern).
+ * Se consideran pagados en un mes si hay movimientos vinculados (`fixedBillId`).
+ * Los gastos que llegan de los Atajos se vinculan solos si el comercio empieza
+ * con `pattern` (o con el nombre, si no hay pattern).
  */
 export const fixedBills = pgTable("fixed_bills", {
   id: serial("id").primaryKey(),

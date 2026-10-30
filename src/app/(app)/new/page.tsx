@@ -1,13 +1,13 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { TransactionForm, type TransactionDefaults } from "@/components/transaction-form"
-import { getCategories } from "@/lib/data"
+import { getCategories, getFixedBillOptions } from "@/lib/data"
 
 export default async function NewTransactionPage({
   searchParams,
 }: {
   searchParams: Promise<{ category?: string; merchant?: string; amount?: string }>
 }) {
-  const [sp, categories] = await Promise.all([searchParams, getCategories()])
+  const [sp, categories, fixedBills] = await Promise.all([searchParams, getCategories(), getFixedBillOptions()])
 
   const categoryId = Number(sp.category)
   const amount = Number(sp.amount)
@@ -26,7 +26,7 @@ export default async function NewTransactionPage({
         <CardTitle>{defaults?.merchant ? `Pagar ${defaults.merchant}` : "Nuevo movimiento"}</CardTitle>
       </CardHeader>
       <CardContent>
-        <TransactionForm categories={categories} defaults={defaults} />
+        <TransactionForm categories={categories} defaults={defaults} fixedBills={fixedBills} />
       </CardContent>
     </Card>
   )
