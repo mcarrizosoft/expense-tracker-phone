@@ -3,21 +3,26 @@ import { LogOutIcon } from "lucide-react"
 import { logout } from "@/app/actions"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { CategoryManager, CopyField, FixedBillManager, RuleList } from "@/components/settings-client"
+import { CategoryManager, CopyField, FixedBillManager, RuleList, UsdKindPicker } from "@/components/settings-client"
 import { ShortcutsGuide } from "@/components/shortcuts-guide"
 import { getCategories, getFixedBillsStatus, getMerchantRules } from "@/lib/data"
 import { currentMonth } from "@/lib/dates"
+import { ensureRates, getQuotes, getUsdKind } from "@/lib/fx"
 
 export default async function SettingsPage() {
-  const [categories, rules, bills, h] = await Promise.all([
+  await ensureRates()
+  const [categories, rules, bills, h, quotes, usdKind] = await Promise.all([
     getCategories(),
     getMerchantRules(),
     getFixedBillsStatus(currentMonth()),
     headers(),
+    getQuotes(),
+    getUsdKind(),
   ])
   const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000"
   const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https")
   const endpoint = `${proto}://${host}/api/ingest`
+  const dollarEndpoint = `${proto}://${host}/api/dolar`
   const token = process.env.INGEST_TOKEN
 
   return (
@@ -53,6 +58,25 @@ export default async function SettingsPage() {
         </CardHeader>
         <CardContent>
           <ShortcutsGuide endpoint={endpoint} />
+        </CardContent>
+      </Card>
+
+      <Card id="dolar" className="scroll-mt-4">
+        <CardHeader>
+          <CardTitle>Dólar de referencia</CardTitle>
+          <CardDescription>
+            Se usa para mostrar tus gastos y saldos en US$. Cada gasto se convierte con la cotización
+            del día en que lo hiciste.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4">
+          <UsdKindPicker value={usdKind} quotes={quotes} />
+          <div className="grid gap-1">
+            <span className="text-xs text-muted-foreground">
+              URL para la notificación del dólar (Obtener contenido de URL, método GET, mismo token)
+            </span>
+            <CopyField value={dollarEndpoint} />
+          </div>
         </CardContent>
       </Card>
 

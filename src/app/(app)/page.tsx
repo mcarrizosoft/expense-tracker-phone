@@ -3,13 +3,16 @@ import { BellIcon, SparklesIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { BalanceCard } from "@/components/balance-card"
+import { DollarCard } from "@/components/dollar-card"
 import { CategoryChart } from "@/components/category-chart"
 import { FixedBillsCard } from "@/components/fixed-bills-card"
 import { MonthSwitcher } from "@/components/month-switcher"
 import { TransactionList } from "@/components/transaction-list"
 import { getCategories, getFixedBillsStatus, getMonthSummary, getTransactions } from "@/lib/data"
 import { getBalances, getSavingsGoals } from "@/lib/balance"
-import { currentMonth, isValidMonth, monthName, shiftMonth } from "@/lib/dates"
+import { arDate, currentMonth, isValidMonth, monthLastDate, monthName, monthRange, shiftMonth } from "@/lib/dates"
+import { ensureRates, getQuotes, getRateLookup, getUsdFlows, getUsdKind, withUsd } from "@/lib/fx"
+import { USD_KIND_LABELS } from "@/lib/labels"
 import { SOURCE_LABELS } from "@/lib/labels"
 import { formatARS } from "@/lib/money"
 
@@ -20,14 +23,21 @@ export default async function DashboardPage({
 }) {
   const { month: monthParam } = await searchParams
   const month = isValidMonth(monthParam) ? monthParam : currentMonth()
+  const prevMonth = shiftMonth(month, -1)
 
-  const [summary, recent, categories, bills, balances, goals] = await Promise.all([
+  await ensureRates()
+  const usdKind = await getUsdKind()
+
+  const [summary, recent, categories, bills, balances, goals, quotes, rateOn, usdFlows] = await Promise.all([
     getMonthSummary(month),
     getTransactions({ month, limit: 8 }),
     getCategories(),
     getFixedBillsStatus(month),
     getBalances(month),
     getSavingsGoals(),
+    getQuotes(),
+    getRateLookup(usdKind, arDate(monthRange(prevMonth).start)),
+    getUsdFlows(usdKind, prevMonth, month),
   ])
   const balance = balances.get(month) ?? {
     month,
@@ -40,7 +50,14 @@ export default async function DashboardPage({
     closedAt: null,
   }
   const savingsTotal = goals.reduce((acc, g) => acc + g.balance, 0)
-  const prevMonth = shiftMonth(month, -1)
+  const today = arDate()
+  const availableRate = rateOn(monthLastDate(month) < today ? monthLastDate(month) : today)
+  const usd = {
+    label: USD_KIND_LABELS[usdKind],
+    available: availableRate ? balance.closing / availableRate : null,
+    spent: usdFlows.get(month)?.spent ?? 0,
+    prevSpent: usdFlows.get(prevMonth)?.spent || null,
+  }
   const prev = month === currentMonth() ? balances.get(prevMonth) : undefined
   const showCloseBanner = !!prev && !prev.closedAt && prev.closing > 0
   const maxSource = Math.max(1, ...summary.bySource.map((s) => s.total))
@@ -63,7 +80,9 @@ export default async function DashboardPage({
         </Link>
       )}
 
-      <BalanceCard balance={balance} savingsTotal={savingsTotal} />
+      <BalanceCard balance={balance} savingsTotal={savingsTotal} usd={usd} />
+
+      <DollarCard quotes={quotes} refKind={usdKind} />
 
       {summary.pending > 0 && (
         <Link
@@ -129,7 +148,7 @@ export default async function DashboardPage({
         </CardHeader>
         <CardContent>
           <TransactionList
-            items={recent}
+            items={withUsd(recent, rateOn)}
             categories={categories}
             fixedBills={bills.map((b) => ({ id: b.id, name: b.name, categoryId: b.categoryId }))}
             emptyText="Sin movimientos. Agregá uno o configurá los Atajos en Ajustes."

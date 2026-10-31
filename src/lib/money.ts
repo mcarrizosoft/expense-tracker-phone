@@ -46,3 +46,10 @@ export function parseAmount(input: string | number): number | null {
 function round2(n: number) {
   return Math.round(n * 100) / 100
 }
+
+const usdFormatter = new Intl.NumberFormat("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+
+/** "US$ 1.234,56" */
+export function formatUSD(value: number): string {
+  return `US$ ${usdFormatter.format(value)}`
+}

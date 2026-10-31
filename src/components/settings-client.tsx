@@ -9,6 +9,7 @@ import {
   deleteCategory,
   deleteFixedBill,
   deleteMerchantRule,
+  setUsdKind,
 } from "@/app/actions"
 import type { Category } from "@/db/schema"
 import { Button } from "@/components/ui/button"
@@ -21,6 +22,8 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import type { FixedBillStatus } from "@/lib/data"
+import type { UsdQuote } from "@/lib/fx"
+import { USD_KINDS, USD_KIND_LABELS, type UsdKind } from "@/lib/labels"
 import { formatARS } from "@/lib/money"
 
 export function CopyField({ value, secret = false }: { value: string; secret?: boolean }) {
@@ -254,6 +257,61 @@ export function FixedBillManager({
           Agregar cuenta fija
         </Button>
       </form>
+    </div>
+  )
+}
+
+const USD_KIND_HINTS: Record<UsdKind, string> = {
+  bolsa: "El que comprás por el banco o broker. Recomendado.",
+  blue: "El de la calle.",
+  cripto: "USDT en Lemon u otro exchange.",
+  oficial: "El del Banco Nación, sin impuestos.",
+}
+
+export function UsdKindPicker({ value, quotes }: { value: UsdKind; quotes: UsdQuote[] }) {
+  const [pending, startTransition] = useTransition()
+
+  function choose(kind: UsdKind) {
+    if (kind === value) return
+    startTransition(async () => {
+      const res = await setUsdKind(kind)
+      if (!res.ok) return void toast.error(res.error)
+      toast.success(`Ahora usás el dólar ${USD_KIND_LABELS[kind]}`)
+    })
+  }
+
+  return (
+    <div className="grid gap-2" role="radiogroup" aria-label="Dólar de referencia">
+      {USD_KINDS.map((kind) => {
+        const quote = quotes.find((q) => q.kind === kind)
+        const selected = kind === value
+        return (
+          <button
+            key={kind}
+            type="button"
+            role="radio"
+            aria-checked={selected}
+            disabled={pending}
+            onClick={() => choose(kind)}
+            className={`flex items-center gap-3 rounded-xl border p-3 text-left transition-colors ${
+              selected ? "border-primary bg-primary/5" : "hover:bg-muted/50"
+            }`}
+          >
+            <span
+              className={`flex size-5 shrink-0 items-center justify-center rounded-full border ${
+                selected ? "border-primary" : ""
+              }`}
+            >
+              {selected && <span className="size-2.5 rounded-full bg-primary" />}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block font-medium">{USD_KIND_LABELS[kind]}</span>
+              <span className="block text-xs text-muted-foreground">{USD_KIND_HINTS[kind]}</span>
+            </span>
+            {quote && <span className="shrink-0 text-sm font-medium tabular-nums">{formatARS(quote.sell)}</span>}
+          </button>
+        )
+      })}
     </div>
   )
 }

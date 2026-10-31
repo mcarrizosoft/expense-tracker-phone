@@ -26,7 +26,7 @@ import { TransactionForm } from "@/components/transaction-form"
 import type { FixedBillOption, TransactionWithCategory } from "@/lib/data"
 import { formatDateTime } from "@/lib/dates"
 import { SOURCE_LABELS, TYPE_LABELS, isIncoming, isOutgoing } from "@/lib/labels"
-import { formatARS } from "@/lib/money"
+import { formatARS, formatUSD } from "@/lib/money"
 import { cn } from "@/lib/utils"
 
 export function TransactionList({
@@ -35,7 +35,7 @@ export function TransactionList({
   fixedBills = [],
   emptyText = "No hay movimientos.",
 }: {
-  items: TransactionWithCategory[]
+  items: (TransactionWithCategory & { usd?: number | null })[]
   categories: Category[]
   fixedBills?: FixedBillOption[]
   emptyText?: string
@@ -101,6 +101,9 @@ export function TransactionList({
                     {sign}
                     {formatARS(tx.amount)}
                   </span>
+                  {tx.usd != null && (
+                    <span className="text-xs text-muted-foreground tabular-nums">≈ {formatUSD(tx.usd)}</span>
+                  )}
                   {tx.needsReview && (
                     <Badge
                       variant="outline"

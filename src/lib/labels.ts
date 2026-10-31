@@ -28,3 +28,20 @@ export const INCOMING_TYPES: TxType[] = ["income", "transfer_in"]
 export function isIncoming(type: TxType) {
   return INCOMING_TYPES.includes(type)
 }
+
+/** Dólares que se pueden usar como referencia (claves de DolarAPI / ArgentinaDatos). */
+export const USD_KINDS = ["bolsa", "blue", "cripto", "oficial"] as const
+export type UsdKind = (typeof USD_KINDS)[number]
+
+export const USD_KIND_LABELS: Record<UsdKind, string> = {
+  bolsa: "MEP",
+  blue: "Blue",
+  cripto: "Cripto",
+  oficial: "Oficial",
+}
+
+export const DEFAULT_USD_KIND: UsdKind = "bolsa"
+
+export function isUsdKind(v: unknown): v is UsdKind {
+  return USD_KINDS.includes(v as UsdKind)
+}

@@ -6,9 +6,10 @@ import { TransactionFilters } from "@/components/transaction-filters"
 import { TransactionList } from "@/components/transaction-list"
 import { txSourceEnum, type TxSource } from "@/db/schema"
 import { getCategories, getFixedBillOptions, getTransactions } from "@/lib/data"
-import { currentMonth, isValidMonth } from "@/lib/dates"
+import { arDate, currentMonth, isValidMonth, monthRange } from "@/lib/dates"
+import { ensureRates, getRateLookup, getUsdKind, withUsd } from "@/lib/fx"
 import { isOutgoing } from "@/lib/labels"
-import { formatARS } from "@/lib/money"
+import { formatARS, formatUSD } from "@/lib/money"
 
 type SearchParams = { month?: string; source?: string; category?: string; pending?: string }
 
@@ -26,12 +27,18 @@ export default async function TransactionsPage({
   const categoryId =
     sp.category === "none" ? ("none" as const) : sp.category ? Number(sp.category) || undefined : undefined
 
-  const [items, categories, fixedBills] = await Promise.all([
+  await ensureRates()
+  const usdKind = await getUsdKind()
+  const [items, categories, fixedBills, rateOn] = await Promise.all([
     getTransactions({ month, source, categoryId, pendingOnly }),
     getCategories(),
     getFixedBillOptions(),
+    // "Por revisar" muestra todos los meses: buscamos el historial desde el inicio.
+    getRateLookup(usdKind, pendingOnly ? "2000-01-01" : arDate(monthRange(month).start)),
   ])
-  const total = items.reduce((acc, t) => acc + (isOutgoing(t.type) ? Number(t.amount) : 0), 0)
+  const rows = withUsd(items, rateOn)
+  const total = rows.reduce((acc, t) => acc + (isOutgoing(t.type) ? Number(t.amount) : 0), 0)
+  const totalUsd = rows.reduce((acc, t) => acc + (isOutgoing(t.type) ? (t.usd ?? 0) : 0), 0)
 
   return (
     <div className="grid gap-4">
@@ -66,11 +73,16 @@ export default async function TransactionsPage({
               </span>
               <span>
                 Gastos: <b className="tabular-nums">{formatARS(total)}</b>
+                {totalUsd > 0 && (
+                  <span className="block text-right text-xs text-muted-foreground tabular-nums">
+                    ≈ {formatUSD(totalUsd)}
+                  </span>
+                )}
               </span>
             </div>
           )}
           <TransactionList
-            items={items}
+            items={rows}
             categories={categories}
             fixedBills={fixedBills}
             emptyText={pendingOnly ? "Nada por revisar 🎉" : "No hay movimientos con estos filtros."}

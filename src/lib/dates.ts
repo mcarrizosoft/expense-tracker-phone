@@ -64,3 +64,13 @@ export function monthName(month: string): string {
     timeZone: AR_TZ,
   })
 }
+
+/** "YYYY-MM-DD" de una fecha en hora argentina. */
+export function arDate(date: Date = new Date()): string {
+  return new Date(date.getTime() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10)
+}
+
+/** Último día del mes ("YYYY-MM-DD"). */
+export function monthLastDate(month: string): string {
+  return arDate(new Date(monthRange(month).end.getTime() - 1))
+}

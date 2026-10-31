@@ -28,7 +28,9 @@ const fmt = new Intl.NumberFormat("es-AR", { minimumFractionDigits: 2, maximumFr
 
 type Move = { goal: SavingsGoalWithBalance; kind: "deposit" | "withdraw" }
 
-export function SavingsGoals({ goals }: { goals: SavingsGoalWithBalance[] }) {
+type UsdRate = { value: number; label: string } | null
+
+export function SavingsGoals({ goals, usdRate }: { goals: SavingsGoalWithBalance[]; usdRate: UsdRate }) {
   const [move, setMove] = useState<Move | null>(null)
   const [editing, setEditing] = useState<SavingsGoalWithBalance | null>(null)
   const [pending, startTransition] = useTransition()
@@ -73,6 +75,11 @@ export function SavingsGoals({ goals }: { goals: SavingsGoalWithBalance[] }) {
                         {avgRate && ` · cotización promedio ${formatARS(avgRate)}`}
                       </div>
                     )}
+                    {g.isUsd && usdRate && g.usd > 0 && (
+                      <div className="text-xs tabular-nums">
+                        Hoy valen <b>{formatARS(g.usd * usdRate.value)}</b> ({usdRate.label})
+                      </div>
+                    )}
                   </div>
                   <Button variant="ghost" size="icon" aria-label={`Editar ${g.name}`} onClick={() => setEditing(g)}>
                     <PencilIcon />
@@ -112,7 +119,7 @@ export function SavingsGoals({ goals }: { goals: SavingsGoalWithBalance[] }) {
         })}
       </div>
 
-      <MoveDialog move={move} onClose={() => setMove(null)} />
+      <MoveDialog move={move} usdRate={usdRate} onClose={() => setMove(null)} />
 
       <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
         <DialogContent>
@@ -160,10 +167,20 @@ export function SavingsGoals({ goals }: { goals: SavingsGoalWithBalance[] }) {
   )
 }
 
-function MoveDialog({ move, onClose }: { move: Move | null; onClose: () => void }) {
+function MoveDialog({
+  move,
+  usdRate,
+  onClose,
+}: {
+  move: Move | null
+  usdRate: UsdRate
+  onClose: () => void
+}) {
   const [pending, startTransition] = useTransition()
   const [amount, setAmount] = useState("")
-  const [rate, setRate] = useState("")
+  // null = sin tocar: se propone el dólar de referencia de hoy.
+  const [rateInput, setRate] = useState<string | null>(null)
+  const rate = rateInput ?? (usdRate ? fmt.format(usdRate.value) : "")
 
   const isUsd = move?.goal.isUsd ?? false
   const ars = amount ? parseAmount(amount) : null
@@ -172,7 +189,7 @@ function MoveDialog({ move, onClose }: { move: Move | null; onClose: () => void 
 
   function close() {
     setAmount("")
-    setRate("")
+    setRate(null)
     onClose()
   }
 
@@ -229,7 +246,11 @@ function MoveDialog({ move, onClose }: { move: Move | null; onClose: () => void 
                 onChange={(e) => setRate(e.target.value)}
                 className="tabular-nums"
               />
-              {usd && <p className="text-sm text-muted-foreground">= US$ {fmt.format(usd)}</p>}
+              <p className="text-sm text-muted-foreground">
+                {usd && `= US$ ${fmt.format(usd)}`}
+                {usd && rateInput === null && usdRate && " · "}
+                {rateInput === null && usdRate && `${usdRate.label} de hoy; cambialo si pagaste otro precio`}
+              </p>
             </div>
           )}
           <div className="grid gap-2">

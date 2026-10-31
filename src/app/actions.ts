@@ -7,6 +7,7 @@ import { eq } from "drizzle-orm"
 import { z } from "zod"
 import { db } from "@/db"
 import {
+  appSettings,
   categories,
   fixedBills,
   merchantRules,
@@ -25,6 +26,7 @@ import {
   verifySessionToken,
 } from "@/lib/auth"
 import { currentMonth, fromLocalInputValue, isValidMonth } from "@/lib/dates"
+import { isUsdKind } from "@/lib/labels"
 import { parseAmount } from "@/lib/money"
 
 export type ActionResult = { ok: true } | { ok: false; error: string }
@@ -281,7 +283,7 @@ export async function setOpeningBalance(month: string, raw: string): Promise<Act
   if (raw.trim()) {
     const negative = raw.trim().startsWith("-")
     const amount = parseAmount(raw)
-    if (amount === null && raw.replace(/[^d]/g, "") !== "0") {
+    if (amount === null && !/^0+$/.test(raw.replace(/\D/g, ""))) {
       return { ok: false, error: "Monto inválido" }
     }
     openingBalance = ((negative ? -1 : 1) * (amount ?? 0)).toFixed(2)
@@ -425,6 +427,19 @@ export async function moveSavings(formData: FormData): Promise<ActionResult> {
 export async function deleteSavingsMovement(id: number): Promise<ActionResult> {
   await requireSession()
   await db.delete(savingsMovements).where(eq(savingsMovements.id, id))
+  refresh()
+  return { ok: true }
+}
+
+// --- Dólar ----------------------------------------------------------------
+
+export async function setUsdKind(kind: string): Promise<ActionResult> {
+  await requireSession()
+  if (!isUsdKind(kind)) return { ok: false, error: "Dólar inválido" }
+  await db
+    .insert(appSettings)
+    .values({ key: "usd_kind", value: kind })
+    .onConflictDoUpdate({ target: appSettings.key, set: { value: kind } })
   refresh()
   return { ok: true }
 }

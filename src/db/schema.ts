@@ -6,6 +6,7 @@ import {
   numeric,
   pgEnum,
   pgTable,
+  primaryKey,
   serial,
   text,
   timestamp,
@@ -120,6 +121,29 @@ export const savingsMovements = pgTable("savings_movements", {
   usd: numeric("usd", { precision: 14, scale: 2 }),
   note: text("note").notNull().default(""),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+})
+
+/**
+ * Cotización del dólar por día ("YYYY-MM-DD", hora argentina) y tipo
+ * (`bolsa` = MEP, `blue`, `cripto`, `oficial`). Se completa sola desde
+ * DolarAPI (hoy) y ArgentinaDatos (historial).
+ */
+export const fxRates = pgTable(
+  "fx_rates",
+  {
+    kind: text("kind").notNull(),
+    date: text("date").notNull(),
+    buy: numeric("buy", { precision: 14, scale: 2 }).notNull(),
+    sell: numeric("sell", { precision: 14, scale: 2 }).notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.kind, t.date] })]
+)
+
+/** Preferencias sueltas de la app (ej: `usd_kind`). */
+export const appSettings = pgTable("app_settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
 })
 
 export type Category = typeof categories.$inferSelect

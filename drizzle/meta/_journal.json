@@ -29,6 +29,13 @@
       "when": 1793384801650,
       "tag": "0003_fixed_bill_link",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1793427960082,
+      "tag": "0004_fx_rates",
+      "breakpoints": true
     }
   ]
 }

@@ -3,7 +3,8 @@ import { ChevronRightIcon, PiggyBankIcon } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import type { MonthBalance } from "@/lib/balance"
 import { monthName, shiftMonth } from "@/lib/dates"
-import { formatARS } from "@/lib/money"
+import { Change } from "@/components/dollar-card"
+import { formatARS, formatUSD } from "@/lib/money"
 import { cn } from "@/lib/utils"
 
 function Row({
@@ -28,12 +29,22 @@ function Row({
   )
 }
 
+export type BalanceUsd = {
+  /** Etiqueta del dólar de referencia ("MEP"). */
+  label: string
+  available: number | null
+  spent: number
+  prevSpent: number | null
+}
+
 export function BalanceCard({
   balance,
   savingsTotal,
+  usd,
 }: {
   balance: MonthBalance
   savingsTotal: number
+  usd?: BalanceUsd | null
 }) {
   const prev = monthName(shiftMonth(balance.month, -1))
   const noOpening = !balance.openingIsManual && balance.opening === 0
@@ -51,6 +62,11 @@ export function BalanceCard({
           >
             {formatARS(balance.closing)}
           </div>
+          {usd?.available != null && (
+            <div className="text-sm text-muted-foreground tabular-nums">
+              ≈ {formatUSD(usd.available)} <span className="text-xs">({usd.label})</span>
+            </div>
+          )}
         </div>
 
         <div className="grid gap-2 rounded-lg bg-muted/50 p-3">
@@ -76,6 +92,23 @@ export function BalanceCard({
               value={Math.abs(balance.saved)}
               sign={balance.saved > 0 ? "−" : "+"}
             />
+          )}
+          {usd && usd.spent > 0 && (
+            <div className="mt-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t pt-2 text-sm">
+              <span className="text-muted-foreground">Gastos en dólares</span>
+              <span className="flex items-center gap-2">
+                {usd.prevSpent ? (
+                  <Change value={((usd.spent - usd.prevSpent) / usd.prevSpent) * 100} />
+                ) : null}
+                <span className="font-medium tabular-nums">{formatUSD(usd.spent)}</span>
+              </span>
+              {usd.prevSpent ? (
+                <span className="w-full text-xs text-muted-foreground tabular-nums">
+                  {prev.charAt(0).toUpperCase() + prev.slice(1)}: {formatUSD(usd.prevSpent)} · cada gasto al dólar{" "}
+                  {usd.label} de su día
+                </span>
+              ) : null}
+            </div>
           )}
         </div>
 
