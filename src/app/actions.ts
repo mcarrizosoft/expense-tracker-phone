@@ -58,7 +58,9 @@ export async function login(_prev: ActionResult | null, formData: FormData): Pro
     path: "/",
     maxAge: SESSION_MAX_AGE,
   })
-  redirect("/")
+  // Volver a donde ibas (ej: el formulario que abre MacroDroid). Solo rutas internas.
+  const next = String(formData.get("next") ?? "")
+  redirect(next.startsWith("/") && !next.startsWith("//") ? next : "/")
 }
 
 export async function logout() {

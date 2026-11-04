@@ -1,15 +1,13 @@
-"use client"
-
-import { useActionState } from "react"
 import { WalletIcon } from "lucide-react"
-import { login } from "@/app/actions"
-import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+import { LoginForm } from "./login-form"
 
-export default function LoginPage() {
-  const [state, action, pending] = useActionState(login, null)
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ next?: string }>
+}) {
+  const { next } = await searchParams
 
   return (
     <main className="flex min-h-dvh items-center justify-center p-4">
@@ -22,23 +20,7 @@ export default function LoginPage() {
           <CardDescription>Ingresá tu contraseña para continuar.</CardDescription>
         </CardHeader>
         <CardContent>
-          <form action={action} className="grid gap-4">
-            <div className="grid gap-2">
-              <Label htmlFor="password">Contraseña</Label>
-              <Input
-                id="password"
-                name="password"
-                type="password"
-                autoComplete="current-password"
-                required
-                autoFocus
-              />
-            </div>
-            {state && !state.ok && <p className="text-sm text-destructive">{state.error}</p>}
-            <Button type="submit" size="lg" disabled={pending}>
-              {pending ? "Entrando…" : "Entrar"}
-            </Button>
-          </form>
+          <LoginForm next={next} />
         </CardContent>
       </Card>
     </main>

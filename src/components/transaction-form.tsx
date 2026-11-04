@@ -23,7 +23,13 @@ import { cn } from "@/lib/utils"
 
 const amountFormatter = new Intl.NumberFormat("es-AR", { minimumFractionDigits: 2 })
 
-export type TransactionDefaults = { categoryId?: number; merchant?: string; amount?: number }
+export type TransactionDefaults = {
+  categoryId?: number
+  merchant?: string
+  amount?: number
+  type?: TxType
+  source?: TxSource
+}
 
 export function TransactionForm({
   categories,
@@ -113,7 +119,7 @@ export function TransactionForm({
       <div className="grid grid-cols-2 gap-3">
         <div className="grid min-w-0 gap-2">
           <Label>Tipo</Label>
-          <Select name="type" defaultValue={initial?.type ?? "expense"}>
+          <Select name="type" defaultValue={initial?.type ?? defaults?.type ?? "expense"}>
             <SelectTrigger className="w-full min-w-0 *:data-[slot=select-value]:block *:data-[slot=select-value]:truncate">
               <SelectValue />
             </SelectTrigger>
@@ -128,7 +134,7 @@ export function TransactionForm({
         </div>
         <div className="grid min-w-0 gap-2">
           <Label>Medio</Label>
-          <Select name="source" defaultValue={initial?.source ?? "manual"}>
+          <Select name="source" defaultValue={initial?.source ?? defaults?.source ?? "manual"}>
             <SelectTrigger className="w-full min-w-0 *:data-[slot=select-value]:block *:data-[slot=select-value]:truncate">
               <SelectValue />
             </SelectTrigger>

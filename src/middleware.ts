@@ -6,8 +6,9 @@ export async function middleware(req: NextRequest) {
   if (ok) return NextResponse.next()
 
   const url = req.nextUrl.clone()
+  const next = req.nextUrl.pathname === "/" ? "" : req.nextUrl.pathname + req.nextUrl.search
   url.pathname = "/login"
-  url.search = ""
+  url.search = next ? `?next=${encodeURIComponent(next)}` : ""
   return NextResponse.redirect(url)
 }
 
