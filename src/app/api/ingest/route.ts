@@ -84,19 +84,37 @@ const payloadSchema = z.object({
   occurredAt: optionalText,
 })
 
+/** Mide etapas para el header Server-Timing (se ve en las DevTools y con curl -i). */
+function timer() {
+  const t0 = performance.now()
+  let last = t0
+  const marks: string[] = []
+  return {
+    mark(name: string) {
+      const now = performance.now()
+      marks.push(`${name};dur=${(now - last).toFixed(1)}`)
+      last = now
+    },
+    header() {
+      return [...marks, `total;dur=${(performance.now() - t0).toFixed(1)}`].join(", ")
+    },
+  }
+}
+
 export async function POST(req: NextRequest) {
+  const timing = timer()
   const expected = process.env.INGEST_TOKEN
   const auth = req.headers.get("authorization") ?? ""
   const token = auth.replace(/^Bearer\s+/i, "").trim()
   if (!expected || !token || !(await safeEqual(token, expected))) {
-    return NextResponse.json({ error: "No autorizado" }, { status: 401 })
+    return NextResponse.json({ error: "No autorizado" }, { status: 401, headers: { "Server-Timing": timing.header() } })
   }
 
   const asText = req.nextUrl.searchParams.get("format") === "text"
   const body = await readPayload(req)
   if (!body) {
     console.warn("[ingest] cuerpo no es JSON")
-    return reply(asText, 400, { error: "El cuerpo debe ser JSON" }, "⚠️ No se pudo leer lo que mandaste")
+    return reply(asText, timing, 400, { error: "El cuerpo debe ser JSON" }, "⚠️ No se pudo leer lo que mandaste")
   }
   if (body.type == null || body.type === "") body.type = inferType(body.merchant ?? body.description)
 
@@ -104,7 +122,7 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) {
     const issues = z.flattenError(parsed.error).fieldErrors
     console.warn("[ingest] datos inválidos", JSON.stringify({ body, issues }))
-    return reply(asText, 400, { error: "Datos inválidos", issues }, "⚠️ Faltan datos: revisá el monto")
+    return reply(asText, timing, 400, { error: "Datos inválidos", issues }, "⚠️ Faltan datos: revisá el monto")
   }
   const data = parsed.data
   if (data.source === "other") {
@@ -115,7 +133,7 @@ export async function POST(req: NextRequest) {
   const amount = parseAmount(data.amount)
   if (amount === null) {
     console.warn("[ingest] monto inválido", JSON.stringify(body))
-    return reply(asText, 400, { error: `Monto inválido: ${data.amount}` }, `⚠️ Monto inválido: ${data.amount}`)
+    return reply(asText, timing, 400, { error: `Monto inválido: ${data.amount}` }, `⚠️ Monto inválido: ${data.amount}`)
   }
 
   let occurredAt = new Date()
@@ -124,12 +142,17 @@ export async function POST(req: NextRequest) {
     if (!Number.isNaN(d.getTime())) occurredAt = d
   }
 
-  const bill = isOutgoing(data.type) ? await fixedBillForMerchant(data.merchant, occurredAt) : null
-  const categoryId =
-    (await categoryIdByName(data.category)) ??
-    (await categoryForMerchant(data.merchant)) ??
-    bill?.categoryId ??
-    null
+  timing.mark("parse")
+
+  // Las tres búsquedas son independientes: van en paralelo. La precedencia se mantiene:
+  // nombre de categoría > regla por comercio > categoría de la cuenta fija.
+  const [bill, byName, byRule] = await Promise.all([
+    isOutgoing(data.type) ? fixedBillForMerchant(data.merchant, occurredAt) : Promise.resolve(null),
+    categoryIdByName(data.category),
+    categoryForMerchant(data.merchant),
+  ])
+  const categoryId = byName ?? byRule ?? bill?.categoryId ?? null
+  timing.mark("lookups")
 
   const [row] = await db
     .insert(transactions)
@@ -146,6 +169,8 @@ export async function POST(req: NextRequest) {
     })
     .returning({ id: transactions.id })
 
+  timing.mark("insert")
+
   revalidatePath("/", "layout")
 
   const [category, balance] = await Promise.all([
@@ -154,6 +179,7 @@ export async function POST(req: NextRequest) {
       : Promise.resolve([]),
     getMonthBalance(currentMonth()),
   ])
+  timing.mark("summary")
   const cat = category[0]
   const message = [
     `✓ ${TYPE_LABELS[data.type]} ${formatARS(amount)}${data.merchant ? ` · ${data.merchant}` : ""}`,
@@ -163,12 +189,13 @@ export async function POST(req: NextRequest) {
     .filter(Boolean)
     .join("\n")
 
-  return reply(asText, 201, { id: row.id, amount, categorized: categoryId !== null, message }, message)
+  return reply(asText, timing, 201, { id: row.id, amount, categorized: categoryId !== null, message }, message)
 }
 
 /** JSON por defecto; texto plano con `?format=text` (para mostrarlo directo como notificación). */
-function reply(asText: boolean, status: number, json: object, text: string) {
+function reply(asText: boolean, timing: ReturnType<typeof timer>, status: number, json: object, text: string) {
+  const serverTiming = { "Server-Timing": timing.header() }
   return asText
-    ? new NextResponse(text, { status, headers: { "Content-Type": "text/plain; charset=utf-8" } })
-    : NextResponse.json(json, { status })
+    ? new NextResponse(text, { status, headers: { "Content-Type": "text/plain; charset=utf-8", ...serverTiming } })
+    : NextResponse.json(json, { status, headers: serverTiming })
 }
